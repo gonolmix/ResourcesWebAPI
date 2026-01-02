@@ -119,7 +119,6 @@ namespace ResourcesWebAPI.Controllers
 
             var resourceFlow = _context.ResourcesFlows.First(rf => rf.ResourceFlowId == id);
 
-            // Обновляем поля
             resourceFlow.ResourceId = resourceFlowDto.ResourceId;
             resourceFlow.Year = resourceFlowDto.Year;
             resourceFlow.Quarter = resourceFlowDto.Quarter;

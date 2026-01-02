@@ -1,6 +1,7 @@
 ﻿
 using Company.Resources.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection;
 
 namespace ResourcesWebAPI
 {
@@ -16,9 +17,17 @@ namespace ResourcesWebAPI
             var resourceConnection = builder.Configuration.GetConnectionString("DefaultConnection");
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+            var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+            builder.Services.AddSwaggerGen(options =>
+            {
+                options.IncludeXmlComments(xmlPath);
+            });
             builder.Services.AddDbContext<ResourceContext>(options =>
                   options.UseSqlServer(resourceConnection));
+
+
+
             var app = builder.Build();
 
             

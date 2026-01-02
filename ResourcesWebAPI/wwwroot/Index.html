@@ -1,0 +1,388 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Управление потоками ресурсов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        tr:hover {
+            background-color: #e8f4fc;
+        }
+
+        .form-container {
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 600px;
+        }
+
+        input, select, button {
+            margin: 8px 0;
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            margin-right: 10px;
+            width: auto;
+            padding: 10px 20px;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button.delete {
+            background: #e74c3c;
+        }
+
+        button.delete:hover {
+            background: #c0392b;
+        }
+
+        button.cancel {
+            background: #95a5a6;
+        }
+
+        button.cancel:hover {
+            background: #7f8c8d;
+        }
+
+        .button-group {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            font-weight: bold;
+            color: #2c3e50;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1> Управление потоками ресурсов</h1>
+
+    <button onclick="showCreateForm()">Добавить поток ресурса</button>
+
+    <div id="formContainer" class="form-container" style="display:none">
+        <h2 id="formTitle">Новый поток ресурса</h2>
+        <input type="hidden" id="resourceFlowId">
+
+        <div class="form-group">
+            <label>Ресурс:</label>
+            <select id="resourceId" required>
+                <option value="">Выберите ресурс...</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Год:</label>
+            <input type="number" id="year" min="1900" max="2100" required placeholder="Например: 2025">
+        </div>
+
+        <div class="form-group">
+            <label>Квартал (1–4):</label>
+            <input type="number" id="quarter" min="1" max="4" required placeholder="1, 2, 3 или 4">
+        </div>
+
+        <div class="form-group">
+            <label>Поставлено (DeliveredQty):</label>
+            <input type="number" id="deliveredQty" step="0.01" placeholder="Опционально">
+        </div>
+
+        <div class="form-group">
+            <label>Использовано (UsedQty):</label>
+            <input type="number" id="usedQty" step="0.01" placeholder="Опционально">
+        </div>
+
+        <div class="button-group">
+            <button onclick="saveResourceFlow()">Сохранить</button>
+            <button class="cancel" onclick="hideForm()">Отмена</button>
+        </div>
+    </div>
+    <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: end;">
+    <div class="form-group" style="margin-bottom: 0;">
+        <label>Поиск по названию ресурса:</label>
+        <input type="text" id="searchInput" placeholder="Например: Электроэнергия" style="width: 300px;">
+    </div>
+    <button onclick="searchFlows()">Найти</button>
+    <button class="cancel" onclick="resetSearch()">Сбросить</button>
+</div>
+    <table id="flowsTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Ресурс</th>
+                <th>Год</th>
+                <th>Квартал</th>
+                <th>Поставлено</th>
+                <th>Использовано</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <script>
+const flowsUrl = '/api/resourcesflow';
+const resourcesUrl = '/api/resourcesflow/resources';
+
+        async function loadFlows() {
+    try {
+        const res = await fetch(flowsUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        const flows = await res.json();
+        renderFlows(flows);
+    } catch (error) {
+        console.error('Ошибка загрузки потоков:', error);
+        document.querySelector('#flowsTable tbody').innerHTML =
+            `<tr><td colspan="7" style="color:red;text-align:center;">Ошибка: ${error.message}</td></tr>`;
+    }
+}
+
+        async function loadResources() {
+            try {
+                const res = await fetch(resourcesUrl);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const resources = await res.json();
+
+                const select = document.getElementById('resourceId');
+                select.innerHTML = '<option value="">Выберите ресурс...</option>';
+
+                resources.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.resourceId;
+                    opt.textContent = r.name || `Ресурс ${r.resourceId}`;
+                    select.appendChild(opt);
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки ресурсов:', error);
+                alert('Не удалось загрузить список ресурсов!');
+            }
+        }
+
+        function showCreateForm() {
+            document.getElementById('formTitle').textContent = 'Новый поток ресурса';
+            document.getElementById('resourceFlowId').value = '';
+            document.getElementById('resourceId').value = '';
+            document.getElementById('year').value = '';
+            document.getElementById('quarter').value = '';
+            document.getElementById('deliveredQty').value = '';
+            document.getElementById('usedQty').value = '';
+            document.getElementById('formContainer').style.display = 'block';
+            loadResources();
+        }
+
+        function hideForm() {
+            document.getElementById('formContainer').style.display = 'none';
+        }
+
+async function saveResourceFlow() {
+    const id = document.getElementById('resourceFlowId').value;
+    const resourceId = document.getElementById('resourceId').value;
+    const year = document.getElementById('year').value;
+    const quarter = document.getElementById('quarter').value;
+    const deliveredQty = document.getElementById('deliveredQty').value;
+    const usedQty = document.getElementById('usedQty').value;
+
+    if (!resourceId || !year || !quarter) {
+        alert('Заполните обязательные поля: Ресурс, Год, Квартал');
+        return;
+    }
+
+    const data = {
+        resourceId: parseInt(resourceId),
+        year: parseInt(year),
+        quarter: parseInt(quarter)
+    };
+
+    if (deliveredQty) data.deliveredQty = parseFloat(deliveredQty);
+    if (usedQty) data.usedQty = parseFloat(usedQty);
+
+    if (id) {
+        data.id = parseInt(id); 
+    }
+
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${flowsUrl}/${id}` : flowsUrl; 
+
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Сервер вернул ошибку: ${response.status} ${errText}`);
+        }
+
+        hideForm();
+        await loadFlows();
+        alert(id ? 'Поток успешно обновлён!' : 'Поток успешно создан!');
+    } catch (error) {
+        console.error('Ошибка сохранения:', error);
+        alert(`Ошибка: ${error.message}`);
+    }
+}
+
+        async function editFlow(id) {
+            try {
+                const res = await fetch(`${flowsUrl}/${id}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const flow = await res.json();
+
+                document.getElementById('formTitle').textContent = 'Редактировать поток';
+                document.getElementById('resourceFlowId').value = flow.resourceFlowId;
+                document.getElementById('resourceId').value = flow.resourceId;
+                document.getElementById('year').value = flow.year;
+                document.getElementById('quarter').value = flow.quarter;
+                document.getElementById('deliveredQty').value = flow.deliveredQty || '';
+                document.getElementById('usedQty').value = flow.usedQty || '';
+                document.getElementById('formContainer').style.display = 'block';
+
+                await loadResources();
+                document.getElementById('resourceId').value = flow.resourceId;
+            } catch (error) {
+                console.error('Ошибка загрузки для редактирования:', error);
+                alert(`Не удалось загрузить данные: ${error.message}`);
+            }
+        }
+
+        async function deleteFlow(id) {
+            if (!confirm('Удалить этот поток ресурса? Это действие нельзя отменить.')) return;
+
+            try {
+                const res = await fetch(`${flowsUrl}/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                await loadFlows();
+                alert('Поток удалён!');
+            } catch (error) {
+                console.error('Ошибка удаления:', error);
+                alert(`Ошибка удаления: ${error.message}`);
+            }
+        }
+        let currentSearchTerm = '';
+
+async function searchFlows() {
+    const term = document.getElementById('searchInput').value.trim();
+    currentSearchTerm = term;
+    if (term === '') {
+        await loadFlows();
+    } else {
+        await loadFlowsByResourceName(term);
+    }
+}
+
+async function loadFlowsByResourceName(resourceName) {
+    try {
+        const url = `${flowsUrl}/flows-by-resources?resourceName=${encodeURIComponent(resourceName)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        const flows = await res.json();
+
+        renderFlows(flows);
+    } catch (error) {
+        console.error('Ошибка поиска:', error);
+        alert(`Ошибка поиска: ${error.message}`);
+    }
+}
+
+function resetSearch() {
+    document.getElementById('searchInput').value = '';
+    currentSearchTerm = '';
+    loadFlows();
+}
+
+// Выносим рендеринг таблицы в отдельную функцию — чтобы не дублировать код
+function renderFlows(flows) {
+    const tbody = document.querySelector('#flowsTable tbody');
+    tbody.innerHTML = '';
+
+    if (!flows || flows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Нет данных</td></tr>';
+        return;
+    }
+
+    flows.forEach(f => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${f.resourceFlowId || ''}</td>
+            <td>${f.resourceName || '—'}</td>
+            <td>${f.year || ''}</td>
+            <td>${f.quarter || ''}</td>
+            <td>${f.deliveredQty !== null && f.deliveredQty !== undefined ? f.deliveredQty : '—'}</td>
+            <td>${f.usedQty !== null && f.usedQty !== undefined ? f.usedQty : '—'}</td>
+            <td class="actions">
+                <button onclick="editFlow(${f.resourceFlowId})">Изменить</button>
+                <button class="delete" onclick="deleteFlow(${f.resourceFlowId})">Удалить</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFlows();
+        });
+    </script>
+</body>
+</html>
